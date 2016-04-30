@@ -814,9 +814,29 @@ var Tabs = Module("tabs", {
             { argCount: "0" });
 
         if (config.has("tabbrowser")) {
+            commands.add(["b[uffer]"],
+                "Switch tabs in all tab groups",
+                function (args) {
+                    // TODO: fuzzy tab selection
+                    if (args.length)
+                        tabs.switchTo(args[0], args.bang, args.count);
+                    else if (args.count)
+                        tabs.select(tabs.visibleTabs[args.count-1]);
+                }, {
+                    argCount: "?",
+                    bang: true,
+                    count: true,
+                    completer: function (context) {
+                        completion.buffer(context);
+                    },
+                    literal: 0,
+                    privateData: true
+                });
+
             commands.add(["cur[rent]"],
                 "Switch tabs in current tab group",
                 function (args) {
+                    // TODO: fuzzy tab selection
                     if (args.length)
                         tabs.switchTo(args[0], args.bang, args.count);
                     else if (args.count)
@@ -832,9 +852,14 @@ var Tabs = Module("tabs", {
                     privateData: true
                 });
 
-            commands.add(["b[uffer]"],
+            commands.add(["tabg[roup]"],
                 "Switch tab groups",
                 function (args) {
+                    // currently only supports index as a command
+                    // TODO: add support for fuzzy selection of tab groups
+                    let selected = args[0] || args.count;
+                    if (selected && selected <= tabs.getGroups().GroupItems.groupItems.length)
+                        tabs.select(tabs.getGroups().GroupItems.groupItems[selected - 1]._activeTab.tab);
                 }, {
                     argCount: "?",
                     bang: true,
@@ -1231,6 +1256,17 @@ var Tabs = Module("tabs", {
             { count: true });
 
         if (config.has("tabbrowser")) {
+            mappings.add([modes.NORMAL], ["b"],
+                "Open a prompt to switch tabs in all tab groups",
+                function ({ count }) {
+                    if (count != null && count <= tabs.allTabs.length) {
+                        tabs.select(tabs.visibleTabs[count-1]);
+                    }
+                    else
+                        CommandExMode().open("buffer! ");
+                },
+                { count: true });
+
             mappings.add([modes.NORMAL], ["c"],
                 "Open a prompt to switch tabs in current tab group",
                 function ({ count }) {
@@ -1241,15 +1277,14 @@ var Tabs = Module("tabs", {
                 },
                 { count: true});
 
-
-            mappings.add([modes.NORMAL], ["b"],
+            mappings.add([modes.NORMAL], ["e"],
                 "Open a prompt to switch tab groups",
                 function ({ count }) {
                     if (count != null && count <= tabs.getGroups().GroupItems.groupItems.length) {
                         tabs.select(tabs.getGroups().GroupItems.groupItems[count-1]._activeTab.tab);
                     }
                     else
-                        CommandExMode().open("buffer! ");
+                        CommandExMode().open("tabgroup! ");
                 },
                 { count: true });
 
