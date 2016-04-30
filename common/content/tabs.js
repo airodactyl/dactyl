@@ -622,6 +622,7 @@ var Tabs = Module("tabs", {
 }, {
     load: function initLoad() {
         tabs.updateTabCount();
+        tabs.getGroups(() => null);
     },
     commands: function initCommands() {
         [
@@ -813,6 +814,25 @@ var Tabs = Module("tabs", {
             { argCount: "0" });
 
         if (config.has("tabbrowser")) {
+            commands.add(["cur[rent]"],
+                "Switch tabs in current tab group",
+                function (args) {
+                    if (args.length)
+                        tabs.switchTo(args[0], args.bang, args.count);
+                    else if (args.count)
+                        tabs.switchTo(String(args.count));
+                }, {
+                    argCount: "?",
+                    bang: true,
+                    count: true,
+                    completer: function (context) {
+                        context.filters.push(({ item }) => item.tab._tabViewTabItem.parent.id == gBrowser.mCurrentTab._tabViewTabItem.parent.id);
+                        completion.buffer(context);
+                    },
+                    literal: 0,
+                    privateData: true
+                });
+
             commands.add(["b[uffer]"],
                 "Switch to a buffer",
                 function (args) {
@@ -1196,6 +1216,17 @@ var Tabs = Module("tabs", {
             { count: true });
 
         if (config.has("tabbrowser")) {
+            mappings.add([modes.NORMAL], ["c"],
+                "Open a prompt to switch tabs in current tab group",
+                function ({ count }) {
+                    if (count != null && count <= tabs.visibleTabs.length)
+                        tabs.select(tabs.visibleTabs[count-1]);
+                    else
+                        CommandExMode().open("current! ");
+                },
+                { count: true});
+
+
             mappings.add([modes.NORMAL], ["b"],
                 "Open a prompt to switch buffers",
                 function ({ count }) {
