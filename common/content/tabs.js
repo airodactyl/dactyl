@@ -826,26 +826,21 @@ var Tabs = Module("tabs", {
                     bang: true,
                     count: true,
                     completer: function (context) {
-                        context.filters.push(({ item }) => item.tab._tabViewTabItem.parent.id == gBrowser.mCurrentTab._tabViewTabItem.parent.id);
-                        completion.buffer(context);
+                        completion.buffer(context, true);
                     },
                     literal: 0,
                     privateData: true
                 });
 
             commands.add(["b[uffer]"],
-                "Switch to a buffer",
+                "Switch tab groups",
                 function (args) {
-                    if (args.length)
-                        tabs.switchTo(args[0], args.bang, args.count);
-                    else if (args.count)
-                        tabs.switchTo(String(args.count));
                 }, {
                     argCount: "?",
                     bang: true,
                     count: true,
                     completer: function (context) {
-                        completion.buffer(context);
+                        completion.tabGroup(context);
                     },
                     literal: 0,
                     privateData: true
@@ -990,7 +985,7 @@ var Tabs = Module("tabs", {
                         switch (args.completeArg) {
                         case 0:
                             if (args["-group"])
-                                completion.tabGroup(context);
+                                completion.tabGroupIndex(context);
                             else {
                                 context.filters.push(({ item }) => item != window);
                                 completion.window(context);
@@ -1150,6 +1145,26 @@ var Tabs = Module("tabs", {
         completion.tabGroup = function tabGroup(context) {
             context.title = ["Tab Groups"];
             context.keys = {
+                text: (group) => group.i + ": " + (group.getTitle() || "(Untitled)"),
+                description: (group) => group.getChildren().map(t => t.tab.label).join(", ")
+            };
+            context.compare = CompletionContext.Sort.number;
+            context.generate = () => {
+                context.incomplete = true;
+                tabs.getGroups(function ({ GroupItems }) {
+                    context.incomplete = false;
+                    GroupItems.groupItems.forEach((item, i) => {
+                        item.i = i + 1;
+                        return item;
+                    });
+                    context.completions = GroupItems.groupItems;
+                });
+            };
+        };
+
+        completion.tabGroupIndex = function tabGroup(context) {
+            context.title = ["Tab Groups"];
+            context.keys = {
                 text: "id",
                 description: function (group) {
                     return group.getTitle() ||
@@ -1228,10 +1243,11 @@ var Tabs = Module("tabs", {
 
 
             mappings.add([modes.NORMAL], ["b"],
-                "Open a prompt to switch buffers",
+                "Open a prompt to switch tab groups",
                 function ({ count }) {
-                    if (count != null)
-                        tabs.switchTo(String(count));
+                    if (count != null && count <= tabs.getGroups().GroupItems.groupItems.length) {
+                        tabs.select(tabs.getGroups().GroupItems.groupItems[count-1]._activeTab.tab);
+                    }
                     else
                         CommandExMode().open("buffer! ");
                 },
