@@ -251,18 +251,15 @@ var Tabs = Module("tabs", {
         let iframe = document.getElementById("tab-view");
         this._groups = iframe ? iframe.contentWindow : null;
 
-        if ("_groups" in this && !func)
+        if (this._groups && !func)
             return this._groups;
 
-        if (func)
-            func = bind(function (func) { func(this._groups); }, this, func);
-
         if (window.TabView && window.TabView._initFrame)
-            window.TabView._initFrame(func);
+            window.TabView._initFrame(bind(function (f) { this._groups = document.getElementById("tab-view").contentWindow; f(this._groups); }, this, func ? func : () => null));
 
-        this._groups = iframe ? iframe.contentWindow : null;
-        if (this._groups && !func)
-            util.waitFor(() => this._groups.TabItems);
+        if (!this._groups && !func)
+            util.waitFor(() => tabs._groups != null && "GroupItems" in tabs._groups && tabs._groups.GroupItems != null);
+
         return this._groups;
     },
 
@@ -622,7 +619,6 @@ var Tabs = Module("tabs", {
 }, {
     load: function initLoad() {
         tabs.updateTabCount();
-        tabs.getGroups(() => null);
     },
     commands: function initCommands() {
         [
