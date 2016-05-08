@@ -1525,6 +1525,31 @@ var Util = Module("Util", XPCOM([Ci.nsIObserver, Ci.nsISupportsWeakReference]), 
     },
 
     /**
+     *
+     * Returns the keys of matches of space separated tokens
+     * in a key => [strings to search] dictionary
+     */
+    substringSearch: function substringSearch(input, dict, outputAll) {
+        let output = (outputAll) ? [] : false;
+
+        let tokens = input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").split(' ');
+        let regex = new RegExp(tokens.join(".* "), "i");
+
+        for (let id in dict) {
+            for (let k = 0; k < dict[id].length; k++) {
+                if (regex.test(dict[id][k])) {
+                    if (!outputAll)
+                        return id;
+
+                    output.push(id);
+                }
+            }
+        }
+
+        return output;
+    },
+
+    /**
      * Returns the selection controller for the given window.
      *
      * @param {Window} window

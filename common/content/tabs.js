@@ -813,11 +813,35 @@ var Tabs = Module("tabs", {
             commands.add(["b[uffer]"],
                 "Switch tabs in all tab groups",
                 function (args) {
-                    // TODO: fuzzy tab selection
-                    if (args.length)
-                        tabs.switchTo(args[0], args.bang, args.count);
-                    else if (args.count)
-                        tabs.select(tabs.visibleTabs[args.count-1]);
+                    // pinned first
+                    let allTabs = tabs.visibleTabs.filter((item) => item.pinned);
+
+                    // add tabs by tabgroup order
+                    for (let group of tabs.getGroups().GroupItems.groupItems) {
+                        for (let child of group.getChildren()) {
+                            allTabs.push(child.tab);
+                        }
+                    }
+
+                    if (args.length) {
+                        let tokens = args[0].split(' ');
+                        let found = tokens[0].match(/^([1-9]\d*):?$/);
+
+                        if (tokens.length == 1 && found && parseInt(found[1]) <= tabs.allTabs.length)
+                            tabs.select(allTabs[parseInt(found[1]) - 1]);
+                        else {
+                            let dict = {};
+
+                            for (let i = 0; i < allTabs.length; i++) {
+                                dict[i] = [i+1 + ": " + (allTabs[i].label || "(Untitled)"), i+1 + ": " + allTabs[i].linkedBrowser.contentDocument.location.href];
+                            }
+
+                            let result = util.substringSearch(args[0], dict);
+
+                            if (result)
+                                tabs.select(allTabs[result]);
+                        }
+                    }
                 }, {
                     argCount: "?",
                     bang: true,
@@ -832,11 +856,26 @@ var Tabs = Module("tabs", {
             commands.add(["cur[rent]"],
                 "Switch tabs in current tab group",
                 function (args) {
-                    // TODO: fuzzy tab selection
-                    if (args.length)
-                        tabs.switchTo(args[0], args.bang, args.count);
-                    else if (args.count)
-                        tabs.switchTo(String(args.count));
+                    if (args.length) {
+                        let tokens = args[0].split(' ');
+                        let found = tokens[0].match(/^([1-9]\d*):?$/);
+
+                        if (tokens.length == 1 && found && parseInt(found[1]) <= tabs.visibleTabs.length)
+                            tabs.select(tabs.visibleTabs[parseInt(found[1]) - 1]);
+                        else {
+                            let dict = {};
+
+                            for (let i = 0; i < tabs.visibleTabs.length; i++) {
+                                dict[i] = [i+1 + ": " + (tabs.visibleTabs[i].label || "(Untitled)"), i+1 + ": " + tabs.visibleTabs[i].linkedBrowser.contentDocument.location.href];
+                            }
+
+                            let result = util.substringSearch(args[0], dict);
+
+                            if (result)
+                                tabs.select(allTabs[result]);
+                        }
+
+                    }
                 }, {
                     argCount: "?",
                     bang: true,
@@ -851,11 +890,26 @@ var Tabs = Module("tabs", {
             commands.add(["tabg[roup]"],
                 "Switch tab groups",
                 function (args) {
-                    // currently only supports index as a command
-                    // TODO: add support for fuzzy selection of tab groups
-                    let selected = args[0] || args.count;
-                    if (selected && selected <= tabs.getGroups().GroupItems.groupItems.length)
-                        tabs.select(tabs.getGroups().GroupItems.groupItems[selected - 1]._activeTab.tab);
+                    if (args.length) {
+                        let tokens = args[0].split(' ');
+                        let found = tokens[0].match(/^([1-9]\d*):?$/);
+                        let groups = tabs.getGroups().GroupItems.groupItems;
+
+                        if (tokens.length == 1 && found && parseInt(found[1]) <= groups.length)
+                            tabs.select(groups[parseInt(found[1]) - 1].getActiveTab().tab);
+                        else {
+                            let dict = {};
+
+                            for (let i = 0; i < groups.length; i++) {
+                                dict[i] = [i+1 + ": " + (groups[i].getTitle() || "(Untitled)")]; 
+                            }
+
+                            let result = util.substringSearch(args[0], dict);
+
+                            if (result)
+                                tabs.select(groups[result].getActiveTab().tab);
+                        }
+                    }
                 }, {
                     argCount: "?",
                     bang: true,
@@ -1100,17 +1154,6 @@ var Tabs = Module("tabs", {
 
             let defItem = { parent: { getTitle: function () { return ""; } } };
 
-            let tabGroups = {};
-            tabs.getGroups();
-            tabs[visible ? "visibleTabs" : "allTabs"].forEach(function (tab, i) {
-                let group = (tab.tabItem || tab._tabViewTabItem || defItem).parent || defItem.parent;
-                if (!hasOwnProp(tabGroups, group.id))
-                    tabGroups[group.id] = [group.getTitle(), []];
-
-                group = tabGroups[group.id];
-                group[1].push([i, tab.linkedBrowser]);
-            });
-
             context.pushProcessor(0, function (item, text, next) {
                 return [
                     ["span", { highlight: "Indicator", style: "display: inline-block;" },
@@ -1137,30 +1180,28 @@ var Tabs = Module("tabs", {
             context.compare = CompletionContext.Sort.number;
             context.filters[0] = CompletionContext.Filter.textDescription;
 
-            for (let [id, vals] of iter(tabGroups))
-                context.fork(id, 0, this, function (context, [name, browsers]) {
-                    context.title = [name || "Buffers"];
-                    context.generate = () =>
-                        Array.map(browsers, function ([i, browser]) {
-                            let indicator = " ";
-                            if (i == tabs.index())
-                                indicator = "%";
-                            else if (i == tabs.index(tabs.alternate))
-                                indicator = "#";
+            let n = 0;
 
-                            let tab = tabs.getTab(i, visible);
-                            let url = browser.contentDocument.location.href;
-                            i = i + 1;
+            let groups = [{ getTitle: () => "Pinned Tabs", getChildren: () => tabs.visibleTabs.filter((item) => item.pinned).map(function (item) { return {tab: item}; }) }];
+            groups = groups.concat((visible) ? [tabs.getGroups().GroupItems.getActiveGroupItem()] : tabs.getGroups().GroupItems.groupItems);
+
+            groups.forEach((group, i) =>
+                context.fork(i, 0, this, function (context, group) {
+                    context.title = [group.getTitle() || "Tabs"];
+                    context.generate = () =>
+                        group.getChildren().map(function ({ tab }) {
+                            let url = tab.linkedBrowser.contentDocument.location.href;
 
                             return {
-                                text: [i + ": " + (tab.label || /*L*/"(Untitled)"), i + ": " + url],
+                                text: [++n + ": " + (tab.label || "(Untitled)"), n + ": " + url],
                                 tab: tab,
-                                id: i,
+                                id: n,
                                 url: url,
                                 icon: tab.image || BookmarkCache.DEFAULT_FAVICON
                             };
                         });
-                }, vals);
+                }, group)
+            );
         };
 
         completion.tabGroup = function tabGroup(context) {
@@ -1256,7 +1297,15 @@ var Tabs = Module("tabs", {
                 "Open a prompt to switch tabs in all tab groups",
                 function ({ count }) {
                     if (count != null && count <= tabs.allTabs.length) {
-                        tabs.select(tabs.visibleTabs[count-1]);
+                        let allTabs = tabs.visibleTabs.filter((item) => item.pinned);
+
+                        for (let group of tabs.getGroups().GroupItems.groupItems) {
+                            for (let child of group.getChildren()) {
+                                allTabs.push(child.tab);
+                            }
+                        }
+
+                        tabs.select(allTabs[count-1]);
                     }
                     else
                         CommandExMode().open("buffer! ");
@@ -1277,7 +1326,7 @@ var Tabs = Module("tabs", {
                 "Open a prompt to switch tab groups",
                 function ({ count }) {
                     if (count != null && count <= tabs.getGroups().GroupItems.groupItems.length) {
-                        tabs.select(tabs.getGroups().GroupItems.groupItems[count-1]._activeTab.tab);
+                        tabs.select(tabs.getGroups().GroupItems.groupItems[count-1].getActiveTab().tab);
                     }
                     else
                         CommandExMode().open("tabgroup! ");
