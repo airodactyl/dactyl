@@ -1152,8 +1152,6 @@ var Tabs = Module("tabs", {
 
             let filter = context.filter.toLowerCase();
 
-            let defItem = { parent: { getTitle: function () { return ""; } } };
-
             context.pushProcessor(0, function (item, text, next) {
                 return [
                     ["span", { highlight: "Indicator", style: "display: inline-block;" },
@@ -1206,8 +1204,9 @@ var Tabs = Module("tabs", {
 
         completion.tabGroup = function tabGroup(context) {
             context.title = ["Tab Groups"];
+            context.anchored = false;
             context.keys = {
-                text: (group) => group.i + ": " + (group.getTitle() || "(Untitled)"),
+                text: (group) => [group.i + ": " + (group.getTitle() || "(Untitled)")],
                 description: (group) => group.getChildren().map(t => t.tab.label).join(", ")
             };
             context.compare = CompletionContext.Sort.number;
