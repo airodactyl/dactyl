@@ -872,7 +872,7 @@ var Tabs = Module("tabs", {
                             let result = util.substringSearch(args[0], dict);
 
                             if (result)
-                                tabs.select(allTabs[result]);
+                                tabs.select(tabs.visibleTabs[result]);
                         }
 
                     }
