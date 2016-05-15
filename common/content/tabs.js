@@ -248,17 +248,17 @@ var Tabs = Module("tabs", {
      * @returns {Window}
      */
     getGroups: function getGroups(func) {
-        let iframe = document.getElementById("tab-view");
-        this._groups = iframe ? iframe.contentWindow : null;
+        this._groups = this._groups ? this._groups : null;
 
-        if (this._groups && !func)
-            return this._groups;
+        // sometimes GroupItem.getChildren is out of order so reorder them
+        if (this._groups)
+            window.TabView.getContentWindow().GroupItems.getActiveGroupItem().reorderTabItemsBasedOnTabOrder();
 
-        if (window.TabView && window.TabView._initFrame)
-            window.TabView._initFrame(bind(function (f) { this._groups = document.getElementById("tab-view").contentWindow; f(this._groups); }, this, func ? func : () => null));
+        if (window.TabView && window.TabView._initFrame) {
+            window.TabView._initFrame(bind(function (f) { this._groups = window.TabView.getContentWindow(); f(this._groups); }, this, func ? func : () => null));
+        }
 
-        if (!this._groups && !func)
-            util.waitFor(() => tabs._groups != null && "GroupItems" in tabs._groups && tabs._groups.GroupItems != null);
+        util.waitFor(() => tabs._groups != null && "GroupItems" in tabs._groups && tabs._groups.GroupItems != null);
 
         return this._groups;
     },
