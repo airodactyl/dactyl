@@ -1023,6 +1023,62 @@ var Dactyl = Module("dactyl", XPCOM(Ci.nsISupportsWeakReference, ModuleBase), {
     },
 
     /**
+     * Helper for :tabopen and :open commands.
+     *
+     * This function takes a string as input and adds or updates the
+     * location bar entries for the URL(s) specified.
+     *
+     * @param {string} str The string will be passed to {@link Dactyl#parseURLs}.
+     * @param {boolean} newTab Determines whether the first URL will be opened
+     *     in the background.
+     * @param {boolean} background If true, new tabs are opened in the background.
+     * @returns {boolean}
+     */
+    openFromInput: function openFromInput(str, newTab = false, background = false) {
+        let urls = dactyl.parseURLs(str || "about:blank");
+
+        dactyl.open(urls, {
+            from: newTab ? "tabopen" : "open",
+            where: newTab ? dactyl.NEW_TAB : dactyl.CURRENT_TAB,
+            background: background
+        });
+
+        let split = [];
+
+        if (options["urlseparator"])
+            split = util.splitLiteral(str, util.regexp("\\s*" + options["urlseparator"] + "\\s*"));
+        else
+            split.push(str);
+
+        for (let id in urls) {
+            let url = urls[id];
+
+            if (typeof url == "string")
+                url = [url, null];
+
+            services.history.DBConnection
+                .createStatement(
+                    "INSERT OR REPLACE INTO moz_inputhistory " +
+                    "SELECT h.id, IFNULL(i.input, '" + split[id] + "'), " +
+                    "IFNULL(i.use_count, 0) * .9 + 1 " +
+                    "FROM moz_places h " +
+                    "LEFT JOIN moz_inputhistory i " +
+                    "ON i.place_id = h.id AND i.input = '" + split[id] + "' " +
+                    "WHERE url = '" + url[0] + "'"
+                ).execute();
+
+            services.history.DBConnection
+                .createStatement(
+                    "UPDATE moz_places " +
+                    "SET typed = 1 " +
+                    "WHERE url = '" + url[0] + "'"
+                ).execute();
+        }
+
+        return true;
+    },
+
+    /**
      * Returns an array of URLs parsed from *str*.
      *
      * Given a string like 'google bla, www.osnews.com' return an array

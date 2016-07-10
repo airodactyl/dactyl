@@ -886,8 +886,7 @@ var Tabs = Module("tabs", {
             commands.add(["tabopen", "t[open]", "tabnew"],
                 "Open one or more URLs in a new tab",
                 function (args) {
-                    dactyl.open(args[0] || "about:blank",
-                                { from: "tabopen", where: dactyl.NEW_TAB, background: args.bang });
+                    dactyl.openFromInput(args[0], true, args.bang);
                 }, {
                     bang: true,
                     completer: function (context) {
