@@ -1147,6 +1147,9 @@ var CommandLine = Module("commandline", {
             this.itemList = commandline.completionList;
             this.itemList.open(this.context);
 
+            this.completionMappings = [];
+            this.doWeCare = false;
+
             dactyl.registerObserver("events.doneFeeding", this.bound.onDoneFeeding, true);
 
             this.autocompleteTimer = Timer(200, 500, function autocompleteTell(tabPressed) {
@@ -1184,6 +1187,7 @@ var CommandLine = Module("commandline", {
         onTab: function onTab(event) {
             this.tabCount += event.shiftKey ? -1 : 1;
             this.tabTimer.tell(event);
+            this.doWeCare = true;
         },
 
         get activeContexts() {
@@ -1214,11 +1218,20 @@ var CommandLine = Module("commandline", {
                 editor.skipSave = true;
                 this.previewClear();
 
-                if (value == null)
+                if (value == null) {
+                    this.updateCompletionMappings(
+                        this.originalCaret, 0, '', true
+                    );
+
                     var [input, caret] = [this.originalValue, this.originalCaret];
+                }
                 else {
                     input = this.getCompletion(offset, value);
                     caret = offset + value.length;
+
+                    this.updateCompletionMappings(
+                        offset, this.originalCaret - offset, value
+                    );
                 }
 
                 // Change the completion text.
@@ -1352,6 +1365,12 @@ var CommandLine = Module("commandline", {
             this.waiting = null;
             this.wildIndex = -1;
 
+            if (this.doWeCare) {
+                this.doWeCare = false;
+
+                // TODO: do stuff!
+            }
+
             this.saveInput();
 
             if (show) {
@@ -1363,6 +1382,48 @@ var CommandLine = Module("commandline", {
             }
 
             this.preview();
+        },
+
+        updateCompletionMappings: function updateCompletionMappings(start, orig_len, new_complete, uncompleted = false) {
+            let orig_str = this.originalValue.slice(start, start + orig_len);
+
+            let new_slots = (new_complete.match(/ /g) || []).length + 1;
+            let new_start = (this.originalValue.slice(0, start).match(/ /g) || []).length;
+            let new_end = new_start + (orig_str.match(/ /g) || []).length + 1;
+
+            let result_start = [];
+            let result_end = [];
+
+            if (new_start < this.completionMappings.length) {
+                if (this.completionMappings[new_start] !== null)
+                    result_start = this.completionMappings.slice(0, new_start - this.completionMappings[new_start][2]);
+                else
+                    result_start = this.completionMappings.slice(0, new_start);
+
+                if (new_end < this.completionMappings.length) {
+                    if (this.completionMappings[new_end] !== null) {
+                        result_end = this.completionMappings.slice(new_end - this.completionMappings[new_end][2]
+                                   + (this.completionMappings[new_end][1].match(/ /g) || []).length + 1);
+                    }
+                    else {
+                        result_end = this.completionMappings.slice(new_end);
+                    }
+                }
+            } else {
+                result_start = this.completionMappings;
+            }
+
+            let new_str = this.originalValue.slice(0, start) + new_complete
+                        + this.originalValue.slice(start + orig_len);
+
+            let result_middle = new Array((new_str.match(/ /g) || []).length
+                              - result_start.length - result_end.length + 1).fill(null);
+
+            if (!uncompleted)
+                for (let index = 0; index < new_slots; index++)
+                    result_middle[new_start - result_start.length + index] = [orig_str, new_complete, index];
+
+            this.completionMappings = result_start.concat(result_middle).concat(result_end);
         },
 
         /**
